@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/**
+ * Tailwind v4 generates utilities from these names: --color-dim becomes
+ * text-dim / bg-dim / border-dim.
+ *
+ * Do NOT write text-[--color-dim]. That arbitrary-value form emits the literal
+ * `color: --color-dim`, which is invalid CSS, so the browser drops the whole
+ * declaration and the element silently inherits its parent's colour. It looks
+ * like a palette problem and is actually a missing var().
+ * Use the generated utility names below.
+ */
+@theme {
+  /* surfaces, darkest to lightest */
+  --color-ink:    #0b0d12;
+  --color-panel:  #141823;
+  --color-raised: #1c2130;
+  --color-line:   #2b3243;
+
+  /* text */
+  --color-fg:     #e9edf6;   /* 15.8:1 on ink */
+  --color-dim:    #a3adc2;   /*  8.4:1 on ink — body-safe, not decorative */
+  --color-muted:  #7d8899;   /*  4.6:1 on ink only — never on panel/raised, where it fails AA */
+
+  /* semantic */
+  --color-accent: #8ab4f8;   /* 9.1:1 on ink */
+  --color-good:   #6ee7a5;
+  --color-warn:   #f2c14e;
+  --color-bad:    #ff8f8b;
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  background: var(--color-ink);
+  color: var(--color-fg);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Selection stays legible against the accent. */
+::selection { background: var(--color-accent); color: var(--color-ink); }
+
+/* Scrollbars that don't punch a bright hole in a dark UI. */
+* { scrollbar-color: var(--color-line) transparent; scrollbar-width: thin; }
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

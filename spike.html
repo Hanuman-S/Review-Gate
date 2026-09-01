@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WebMCP spike — de-risk before building</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0f1115; --fg:#e6e8ee; --dim:#9aa3b2;
+          --ok:#4ade80; --bad:#f87171; --warn:#fbbf24; --line:#262b36; --card:#161a22; }
+  * { box-sizing:border-box }
+  body { margin:0; padding:24px; background:var(--bg); color:var(--fg);
+         font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  h1 { font-size:16px; margin:0 0 4px }
+  p.sub { color:var(--dim); margin:0 0 20px }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px;
+          padding:16px; margin-bottom:14px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px }
+  button { font:inherit; background:#222835; color:var(--fg); border:1px solid var(--line);
+           border-radius:7px; padding:7px 12px; cursor:pointer }
+  button:hover { border-color:#3a4152 }
+  .ok{color:var(--ok)} .bad{color:var(--bad)} .warn{color:var(--warn)} .dim{color:var(--dim)}
+  #log { white-space:pre-wrap; max-height:340px; overflow:auto; font-size:12.5px }
+  dialog { background:var(--card); color:var(--fg); border:1px solid var(--line);
+           border-radius:12px; padding:20px; max-width:460px; font:inherit }
+  dialog::backdrop { background:rgba(0,0,0,.6) }
+  label { display:block; margin:8px 0; cursor:pointer }
+  code { color:var(--warn) }
+</style>
+</head>
+<body>
+<h1>WebMCP spike</h1>
+<p class="sub">Goal: prove the plumbing works before you build anything on top of it.</p>
+
+<div class="card">
+  <strong>1. Environment</strong>
+  <div id="env" class="dim">checking…</div>
+</div>
+
+<div class="card">
+  <strong>2. Tool registration + local invocation</strong>
+  <div class="dim">These buttons call your tools directly, with no agent involved. If these
+  work, your tool code is fine and any remaining problem is agent-side.</div>
+  <div class="row">
+    <button id="btn-list">getTools()</button>
+    <button id="btn-echo">run ungated tool</button>
+    <button id="btn-gated">run consent-gated tool</button>
+    <button id="btn-clear">clear log</button>
+  </div>
+</div>
+
+<div class="card">
+  <strong>3. Log</strong>
+  <div id="log"></div>
+</div>
+
+<dialog id="gate">
+  <div style="font-weight:600;margin-bottom:6px">Release text to the agent?</div>
+  <div class="dim" id="gate-why" style="margin-bottom:12px"></div>
+  <div id="gate-items"></div>
+  <div class="row" style="margin-top:16px">
+    <button id="gate-allow">Release selected</button>
+    <button id="gate-deny">Deny</button>
+  </div>
+</dialog>
+
+<script>
+const logEl = document.getElementById('log');
+const log = (msg, cls='') =>
+  logEl.insertAdjacentHTML('beforeend',
+    `<div class="${cls}">${new Date().toLocaleTimeString()}  ${msg}</div>`);
+
+/* ---------------------------------------------------------------
+   API LOCATION SHIM
+   The spec moved from navigator.modelContext to document.modelContext
+   in July 2026. Older polyfills and most blog posts still use the old
+   location. Bind once, here, and never touch either global again.
+----------------------------------------------------------------*/
+const mc = (typeof document !== 'undefined' && document.modelContext)
+        || (typeof navigator !== 'undefined' && navigator.modelContext)
+        || null;
+
+const where = document.modelContext ? 'document.modelContext'
+            : navigator.modelContext ? 'navigator.modelContext (legacy location)'
+            : 'NOT FOUND';
+
+document.getElementById('env').innerHTML =
+  `API: <span class="${mc ? 'ok' : 'bad'}">${where}</span><br>` +
+  `registerTool: ${mc && mc.registerTool ? '<span class=ok>yes</span>' : '<span class=bad>no</span>'} · ` +
+  `getTools: ${mc && mc.getTools ? '<span class=ok>yes</span>' : '<span class=bad>no</span>'} · ` +
+  `executeTool: ${mc && mc.executeTool ? '<span class=ok>yes</span>' : '<span class=bad>no</span>'} · ` +
+  `requestUserInteraction: ${mc && mc.requestUserInteraction ? '<span class=ok>yes</span>' : '<span class=warn>no — using in-page gate</span>'}<br>` +
+  `secure context: ${window.isSecureContext ? '<span class=ok>yes</span>' : '<span class=bad>no — WebMCP requires HTTPS or localhost</span>'}<br>` +
+  (mc ? '' : '<span class=bad>Enable chrome://flags/#enable-webmcp-testing (Chrome 149+) and relaunch.</span>');
+
+/* ---------------------------------------------------------------
+   CONSENT GATE — implemented in-page, deliberately.
+   requestUserInteraction() is NOT in Chrome's shipped imperative API.
+   You do not need it: execute() is async, so the agent waits as long
+   as you like. Owning the dialog also means you control what it shows,
+   which is the entire product here.
+----------------------------------------------------------------*/
+const gateEl      = document.getElementById('gate');
+const gateItemsEl = document.getElementById('gate-items');
+const gateWhyEl   = document.getElementById('gate-why');
+
+function requestConsent({ why, items }) {
+  return new Promise(resolve => {
+    gateWhyEl.textContent = why;
+    gateItemsEl.innerHTML = items.map((t, i) =>
+      `<label><input type="checkbox" checked data-i="${i}"> ${t}</label>`).join('');
+
+    const done = (approved) => {
+      gateEl.close();
+      allow.removeEventListener('click', onAllow);
+      deny.removeEventListener('click', onDeny);
+      resolve(approved);
+    };
+    const onAllow = () => done(
+      [...gateItemsEl.querySelectorAll('input:checked')].map(c => items[+c.dataset.i]));
+    const onDeny  = () => done([]);
+
+    const allow = document.getElementById('gate-allow');
+    const deny  = document.getElementById('gate-deny');
+    allow.addEventListener('click', onAllow);
+    deny.addEventListener('click', onDeny);
+    gateEl.showModal();
+  });
+}
+
+/* ---------------------------------------------------------------
+   TOOLS
+----------------------------------------------------------------*/
+const CORPUS = [
+  'Participants were randomised 1:1 (n=48).',
+  'Effect was significant (p<0.05) across all subgroups.',
+  'No correction for multiple comparisons was applied.',
+];
+
+async function registerAll() {
+  if (!mc || !mc.registerTool) { log('no API — nothing registered', 'bad'); return; }
+  try {
+    await mc.registerTool({
+      name: 'echo_claim',
+      description: 'Return one sentence from the loaded document by index.',
+      inputSchema: {
+        type: 'object',
+        properties: { index: { type: 'number', description: '0-based sentence index' } },
+        required: ['index']
+      },
+      execute: async ({ index }) => CORPUS[index] ?? 'out of range'
+    });
+    log('registered echo_claim', 'ok');
+
+    await mc.registerTool({
+      name: 'release_claims',
+      description: 'Ask the human to release document sentences to the agent. ' +
+                   'Returns only what the human approves.',
+      inputSchema: {
+        type: 'object',
+        properties: { reason: { type: 'string', description: 'Why you need this text' } },
+        required: ['reason']
+      },
+      execute: async ({ reason }) => {
+        const approved = await requestConsent({ why: reason, items: CORPUS });
+        log(`consent: ${approved.length}/${CORPUS.length} released`,
+            approved.length ? 'ok' : 'warn');
+        return approved.length
+          ? approved.join('\n')
+          : 'The human declined to release any text.';
+      }
+    });
+    log('registered release_claims', 'ok');
+  } catch (e) {
+    log('registration failed: ' + e.message, 'bad');
+  }
+}
+registerAll();
+
+/* ---------------------------------------------------------------
+   LOCAL INVOCATION — no agent needed
+   Return-shape is unsettled across builds (bare string vs MCP-style
+   {content:[{type:'text',text}]}). Normalise on the way out.
+----------------------------------------------------------------*/
+const asText = r =>
+  typeof r === 'string' ? r
+  : r && Array.isArray(r.content) ? r.content.map(c => c.text ?? '').join('')
+  : JSON.stringify(r);
+
+async function callTool(name, args) {
+  if (!mc) return log('no API', 'bad');
+  try {
+    if (mc.executeTool) {
+      const tools = await mc.getTools?.();
+      const tool  = tools?.find?.(t => t.name === name) ?? name;
+      const out   = await mc.executeTool(tool, JSON.stringify(args));
+      log(`${name} → ${asText(out)}`, 'ok');
+    } else {
+      log('executeTool() unavailable in this build — test via an agent instead', 'warn');
+    }
+  } catch (e) { log(`${name} threw: ${e.message}`, 'bad'); }
+}
+
+document.getElementById('btn-list').onclick = async () => {
+  try {
+    const tools = await mc?.getTools?.();
+    log('getTools → ' + JSON.stringify(tools?.map?.(t => t.name) ?? tools), 'ok');
+  } catch (e) { log('getTools threw: ' + e.message, 'bad'); }
+};
+document.getElementById('btn-echo').onclick  = () => callTool('echo_claim', { index: 2 });
+document.getElementById('btn-gated').onclick = () =>
+  callTool('release_claims', { reason: 'Checking whether stats are correctly reported.' });
+document.getElementById('btn-clear').onclick = () => logEl.innerHTML = '';
+</script>
+</body>
+</html>

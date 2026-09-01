@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%237dd3fc'/%3E%3C/svg%3E" />
+    <title>ReviewGate — confidential peer review</title>
+    <!--
+      No external fonts, no analytics, no error reporting.
+      A single outbound request undermines the entire confidentiality claim.
+      Keep this file free of third-party origins.
+
+      ORIGIN TRIAL
+      WebMCP is behind a Chrome origin trial. Without a token, visitors must
+      enable chrome://flags/#enable-webmcp-testing themselves — which judges
+      will not do. With a token, the API is simply available to any Chrome 149+
+      visitor.
+
+      Tokens are bound to one exact origin. https://reviewgate.vercel.app and
+      https://reviewgate-git-main-you.vercel.app are DIFFERENT origins, so a
+      preview deployment will not be covered. Register the production origin,
+      paste the token below, and submit that URL.
+
+      Register: https://developer.chrome.com/origintrials
+    -->
+    <!-- <meta http-equiv="origin-trial" content="PASTE_YOUR_TOKEN_HERE" /> -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/netguard.js"></script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

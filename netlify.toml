@@ -1,0 +1,16 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# The confidentiality claim shouldn't rest on a promise not to add a fetch().
+# connect-src 'none' makes the browser refuse every outbound request the page
+# could make — XHR, fetch, WebSocket, sendBeacon. If someone later adds
+# analytics, the deploy breaks loudly instead of leaking a manuscript quietly.
+#
+# Applied at deploy time only: Vite's dev server needs a WebSocket for HMR.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'"
+    Referrer-Policy = "no-referrer"
+    X-Content-Type-Options = "nosniff"
