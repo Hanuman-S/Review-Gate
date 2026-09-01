@@ -144,6 +144,44 @@ check('tools still run in-page without WebMCP',
   (await bare.locator('main').innerText()).includes('ABSTRACT'));
 await bare.close();
 
+/* --- an API that arrives after first paint ------------------------------- */
+// The ChatGPT in-app browser scenario: the embedder installs
+// document.modelContext once the page is already running. Registering only at
+// mount silently registers nothing and never recovers.
+const late = await browser.newPage();
+await late.addInitScript(() => {
+  let real;
+  let accepting = false;
+  Object.defineProperty(document, 'modelContext', {
+    get: () => real,
+    set: (v) => { if (accepting) real = v; },   // swallow the dev polyfill
+    configurable: true,
+  });
+  window.__installLate = () => {
+    accepting = true;
+    const tools = new Map();
+    real = {
+      async registerTool(def, o) {
+        tools.set(def.name, def);
+        o?.signal?.addEventListener('abort', () => tools.delete(def.name));
+      },
+      unregisterTool: (n) => tools.delete(n),
+      async getTools() { return [...tools.values()].map(({ name }) => ({ name })); },
+      addEventListener() {}, removeEventListener() {},
+    };
+  };
+});
+await late.goto(URL, { waitUntil: 'networkidle' });
+await late.waitForTimeout(600);
+check('reports honestly while no API is present',
+  (await late.locator('header').innerText()).includes('WebMCP unavailable'));
+await late.evaluate(() => window.__installLate());
+await late.waitForTimeout(2000);
+check('picks up an API installed after first paint',
+  (await late.locator('header').innerText()).includes('WebMCP via'),
+  (await late.locator('header').innerText()).split('\n')[1]?.slice(0, 60));
+await late.close();
+
 /* --- the central claim --------------------------------------------------- */
 check('zero outbound network requests',
   await page.evaluate(() => window.__netguard.counts.total) === 0);

@@ -10,7 +10,7 @@
  * close, so the tool surface reflects application state.
  */
 import { useEffect } from 'react';
-import { registerTools } from '../lib/modelContext.js';
+import { registerTools, waitForApi } from '../lib/modelContext.js';
 
 export function useWebMCPTools({ defs, onRegistered }) {
   useEffect(() => {
@@ -18,9 +18,16 @@ export function useWebMCPTools({ defs, onRegistered }) {
     // first run before its async registrations collide with the second run's.
     const controller = new AbortController();
 
-    registerTools(defs, controller).then((names) => {
-      if (!controller.signal.aborted) onRegistered?.(names);
-    });
+    // Keep watching for the API rather than checking once. Embedders can inject
+    // it after first paint; a one-shot check would register nothing and never
+    // retry, which is indistinguishable from the site not supporting WebMCP.
+    (async () => {
+      const available = await waitForApi({ signal: controller.signal });
+      if (controller.signal.aborted) return;
+      if (!available) { onRegistered?.([], false); return; }
+      const names = await registerTools(defs, controller);
+      if (!controller.signal.aborted) onRegistered?.(names, true);
+    })();
 
     return () => controller.abort();
   }, [defs, onRegistered]);

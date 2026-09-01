@@ -83,6 +83,24 @@ export async function registerTools(defs, controller) {
   return registered;
 }
 
+/**
+ * Resolve once the API exists, or false on timeout.
+ *
+ * Registering only at mount is wrong: an embedding browser (ChatGPT's in-app
+ * browser, an extension bridge) may install document.modelContext *after* the
+ * page's first paint. A single check at mount silently registers nothing and
+ * never recovers, which looks exactly like "the site doesn't support WebMCP".
+ */
+export async function waitForApi({ signal, timeoutMs = 20000, intervalMs = 250 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (signal?.aborted) return false;
+    if (getMc()?.registerTool) return true;
+    if (Date.now() > deadline) return false;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+}
+
 /** Invoke a tool locally, with no agent. Your fallback demo path. */
 export async function executeLocally(name, args) {
   const mc = getMc();
