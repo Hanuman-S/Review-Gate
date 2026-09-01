@@ -28,6 +28,7 @@ function Workspace() {
   const [output, setOutput] = useState(null);
   const [reviewTitle, setReviewTitle] = useState(null);
   const [confirm, setConfirm] = useState(null);
+  const [apiReady, setApiReady] = useState(() => isSupported());
   const outputRef = useRef(null);
 
   const refresh = useCallback(async () => {
@@ -46,7 +47,12 @@ function Workspace() {
     () => buildTools({ manuscript, requestConsent, onChange: refresh }),
     [manuscript, requestConsent, refresh],
   );
-  const onRegistered = useCallback(() => { listTools().then(setTools); }, []);
+  // Readiness is reported by the registration watcher, not read once at render:
+  // the API can arrive late, and the header must correct itself when it does.
+  const onRegistered = useCallback((names, ready) => {
+    setApiReady(!!ready);
+    listTools().then(setTools);
+  }, []);
   useWebMCPTools({ defs, onRegistered });
 
   /** Every sentence id ever released, for highlighting in the manuscript. */
@@ -127,10 +133,11 @@ function Workspace() {
       <header className="flex flex-wrap items-center gap-3 border-b border-line bg-panel px-5 py-3">
         <div className="font-semibold">ReviewGate</div>
         <div className="text-xs text-dim">
-          {isSupported()
+          {apiReady
             ? <>WebMCP via <code className="text-accent">{getApiLocation()}</code> · {tools.length} tools exposed</>
             : <span className="text-warn">
-                WebMCP unavailable — enable chrome://flags/#enable-webmcp-testing (Chrome 149+)
+                WebMCP unavailable — still watching for it. Every tool below works
+                without it. In Chrome, enable chrome://flags/#enable-webmcp-testing (149+).
               </span>}
         </div>
         <div className="ml-auto flex items-center gap-3">
