@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import ExportPreview from './ExportPreview.jsx';
+import { buildReviewMarkdown } from '../lib/export.js';
 
 /**
  * The reviewer's own draft. The agent can write here (add_review_note,
@@ -7,28 +9,7 @@ import { useState } from 'react';
  */
 export default function ReviewDraft({ notes, onAdd, onDelete, reviewTitle }) {
   const [text, setText] = useState('');
-
-  const exportMd = () => {
-    const body = [
-      '# Reviewer report',
-      '',
-      `Manuscript: ${reviewTitle ?? 'unknown'}`,
-      '',
-      ...notes.map((n) =>
-        n.text.startsWith('##')
-          ? `\n${n.text}\n`
-          : `- ${n.sectionId ? `**${n.sectionId}** — ` : ''}${n.text}`),
-      '',
-      '---',
-      '_Drafted with ReviewGate. The manuscript was processed locally in the',
-      'reviewer\'s browser and was not transmitted to any server._',
-    ].join('\n');
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([body], { type: 'text/markdown' }));
-    a.download = 'review-draft.md';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
+  const [preview, setPreview] = useState(false);
 
   const submit = (e) => {
     e.preventDefault();
@@ -42,7 +23,7 @@ export default function ReviewDraft({ notes, onAdd, onDelete, reviewTitle }) {
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <div className="text-sm font-medium">Review draft</div>
         <button
-          onClick={exportMd}
+          onClick={() => setPreview(true)}
           disabled={!notes.length}
           className="rounded-md border border-line px-2.5 py-1 text-xs hover:bg-raised disabled:opacity-40"
         >
@@ -91,6 +72,14 @@ export default function ReviewDraft({ notes, onAdd, onDelete, reviewTitle }) {
           Add note
         </button>
       </form>
+
+      <ExportPreview
+        open={preview}
+        title="Reviewer report"
+        filename="review-draft.md"
+        text={buildReviewMarkdown(notes, reviewTitle)}
+        onClose={() => setPreview(false)}
+      />
     </div>
   );
 }

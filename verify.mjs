@@ -98,6 +98,26 @@ await page.waitForTimeout(400);
 check('reviewer can add notes',
   (await page.locator('aside').innerText()).includes('Sample size is not justified'));
 
+/* --- exports must be visible, not just downloadable ---------------------- */
+// Embedded browsers block blob downloads silently, so the reviewer has to be
+// able to see and copy the export without one.
+await page.getByRole('button', { name: /^Disclosure/ }).click();
+await page.waitForTimeout(300);
+await page.getByRole('button', { name: 'Export for editor' }).click();
+await page.waitForTimeout(400);
+const exportText = await page.locator('[role=dialog] pre').innerText();
+check('disclosure export is shown on screen',
+  exportText.includes('AI assistance disclosure') && exportText.includes('| Time | Tool |'));
+check('export names the manuscript it describes',
+  exportText.includes('Manuscript:') && !exportText.includes('Manuscript: unknown'));
+check('export totals the withheld passages',
+  /withheld\./.test(exportText), exportText.split('\n').slice(-1)[0]?.slice(0, 70));
+check('export offers copy as well as download',
+  await page.getByRole('button', { name: 'Copy' }).count() > 0
+  && await page.getByRole('button', { name: 'Download' }).count() > 0);
+await page.getByRole('button', { name: 'close', exact: true }).click();
+await page.waitForTimeout(300);
+
 /* --- what survives closing the manuscript -------------------------------- */
 const logBefore = (await page.locator('aside').innerText()).length;
 await page.getByRole('button', { name: /^Disclosure/ }).click();

@@ -5,36 +5,18 @@
  * and it is the reason a reviewer could defend using this tool to an editor.
  * Build it early; it is not a nice-to-have.
  */
-export default function DisclosureLog({ entries, reviewTitle, manuscriptOpen }) {
-  const exportMd = () => {
-    const lines = [
-      '# AI assistance disclosure',
-      '',
-      `Manuscript: ${reviewTitle ?? 'unknown'}`,
-      '',
-      'Tool: ReviewGate. The manuscript was processed entirely in the reviewer\'s',
-      'browser and was not transmitted to any server. Every passage below was',
-      'explicitly released by the reviewer.',
-      '',
-      '| Time | Tool | Requested | Released | Withheld | Scope |',
-      '|---|---|---|---|---|---|',
-      ...entries.map((e) =>
-        `| ${new Date(e.at).toISOString()} | ${e.tool} | ${e.requested} | ${e.released} | ${e.withheld} | ${e.scope ?? 'once'} |`),
-    ];
-    const blob = new Blob([lines.join('\n')], { type: 'text/markdown' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'ai-disclosure.md';
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
+import { useState } from 'react';
+import ExportPreview from './ExportPreview.jsx';
+import { buildDisclosureMarkdown } from '../lib/export.js';
 
+export default function DisclosureLog({ entries, reviewTitle, manuscriptOpen }) {
+  const [preview, setPreview] = useState(false);
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <div className="text-sm font-medium">Disclosure log</div>
         <button
-          onClick={exportMd}
+          onClick={() => setPreview(true)}
           disabled={!entries.length}
           className="rounded-md border border-line px-2.5 py-1 text-xs hover:bg-raised disabled:opacity-40"
         >
@@ -73,6 +55,13 @@ export default function DisclosureLog({ entries, reviewTitle, manuscriptOpen }) 
           </div>
         ))}
       </div>
+      <ExportPreview
+        open={preview}
+        title="AI assistance disclosure"
+        filename="ai-disclosure.md"
+        text={buildDisclosureMarkdown(entries, reviewTitle)}
+        onClose={() => setPreview(false)}
+      />
     </div>
   );
 }
