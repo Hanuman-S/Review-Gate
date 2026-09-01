@@ -17,14 +17,52 @@ const dbp = openDB(DB, VERSION, {
   },
 });
 
-export const saveManuscript = async (m) => (await dbp).put('manuscript', m, 'current');
+/**
+ * Saving a manuscript also records which review the draft and log belong to.
+ * Without that, closing one manuscript and opening another silently merges two
+ * reviews into one disclosure log — and an audit trail that attributes passages
+ * to the wrong paper is worse than no audit trail.
+ */
+export const saveManuscript = async (m) => {
+  const db = await dbp;
+  await db.put('manuscript', m, 'current');
+  await db.put('manuscript', m.title, 'reviewOf');
+};
+
+/** Which manuscript the current draft and disclosure log describe. */
+export const loadReviewTitle = async () => (await dbp).get('manuscript', 'reviewOf');
 export const loadManuscript = async ()  => (await dbp).get('manuscript', 'current');
 
-/** Closing a manuscript revokes every standing grant. Grants never outlive it. */
+/**
+ * Closing a manuscript drops the text and revokes every standing grant, but
+ * deliberately keeps the draft and the disclosure log.
+ *
+ * The draft is the reviewer's work product and the log is their evidence for the
+ * editor. Destroying either on a routine "close" would lose work and, worse,
+ * destroy the record of what the agent was shown. Use eraseAll() to wipe.
+ */
 export const clearManuscript = async () => {
   const db = await dbp;
   await db.delete('manuscript', 'current');
   await db.clear('grants');
+};
+
+/** Whether there is review work that would be lost by starting a new review. */
+export const hasReviewWork = async () => {
+  const db = await dbp;
+  return (await db.count('notes')) + (await db.count('disclosure')) > 0;
+};
+
+/**
+ * Erase everything this app holds. A tool whose promise is "your document stays
+ * on your machine" must also answer "how do I get rid of it?".
+ */
+export const eraseAll = async () => {
+  const db = await dbp;
+  await Promise.all([
+    db.clear('manuscript'), db.clear('notes'),
+    db.clear('disclosure'), db.clear('grants'),
+  ]);
 };
 
 export const addNote    = async (n)  => (await dbp).add('notes', { ...n, at: Date.now() });

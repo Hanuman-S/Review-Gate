@@ -5,12 +5,13 @@ import { buildTools } from './lib/tools.js';
 import ConsentDialog from './components/ConsentDialog.jsx';
 import DisclosureLog from './components/DisclosureLog.jsx';
 import ReviewDraft from './components/ReviewDraft.jsx';
+import ConfirmDialog from './components/ConfirmDialog.jsx';
 import NetworkCounter from './components/NetworkCounter.jsx';
 import { parseManuscript } from './lib/manuscript.js';
 import {
   saveManuscript, loadManuscript, clearManuscript,
   allDisclosure, allNotes, addNote, deleteNote,
-  allGrants, revokeGrants,
+  allGrants, revokeGrants, loadReviewTitle, hasReviewWork, eraseAll,
 } from './lib/db.js';
 import { isSupported, getApiLocation, listTools } from './lib/modelContext.js';
 import { SAMPLE_TEXT, SAMPLE_TITLE } from './data/sample.js';
@@ -25,12 +26,15 @@ function Workspace() {
   const [tab, setTab] = useState('log');
   const [busy, setBusy] = useState(null);
   const [output, setOutput] = useState(null);
+  const [reviewTitle, setReviewTitle] = useState(null);
+  const [confirm, setConfirm] = useState(null);
   const outputRef = useRef(null);
 
   const refresh = useCallback(async () => {
     setDisclosure(await allDisclosure());
     setNotes(await allNotes());
     setGrants(await allGrants());
+    setReviewTitle(await loadReviewTitle());
   }, []);
 
   useEffect(() => { loadManuscript().then((m) => m && setManuscript(m)); refresh(); }, [refresh]);
@@ -52,12 +56,32 @@ function Workspace() {
     return s;
   }, [disclosure]);
 
-  const open = async (text, title) => {
+  const openNow = async (text, title) => {
     const m = parseManuscript(text, title);
     await saveManuscript(m);
     await revokeGrants();
     setManuscript(m);
     await refresh();
+  };
+
+  /**
+   * Starting a review of a different manuscript while a draft and log already
+   * exist would merge two reviews into one record. Make that an explicit choice.
+   */
+  const open = async (text, title) => {
+    const prior = await loadReviewTitle();
+    if (prior && prior !== title && await hasReviewWork()) {
+      setConfirm({
+        title: 'Start a new review?',
+        body: `Your draft and disclosure log belong to "${prior}". Starting a review
+               of a different manuscript erases both, so export anything you need first.`,
+        confirmLabel: 'Erase and start new',
+        danger: true,
+        onConfirm: async () => { await eraseAll(); setConfirm(null); await openNow(text, title); },
+      });
+      return;
+    }
+    await openNow(text, title);
   };
 
   const onFile = async (e) => {
@@ -119,6 +143,23 @@ function Workspace() {
               revoke {grants.size} standing grant{grants.size === 1 ? '' : 's'}
             </button>
           )}
+          {(notes.length > 0 || disclosure.length > 0) && (
+            <button
+              onClick={() => setConfirm({
+                title: 'Erase all local data?',
+                body: 'Deletes the manuscript, your review draft, the disclosure log and every standing grant from this browser. This cannot be undone, and the disclosure log is your record of what the agent was shown.',
+                confirmLabel: 'Erase everything',
+                danger: true,
+                onConfirm: async () => {
+                  await eraseAll(); setManuscript(null); setOutput(null);
+                  setConfirm(null); await refresh();
+                },
+              })}
+              className="rounded-lg border border-line px-3 py-1.5 text-xs text-dim hover:border-bad/50 hover:text-bad"
+            >
+              erase local data
+            </button>
+          )}
           <NetworkCounter />
         </div>
       </header>
@@ -131,6 +172,14 @@ function Workspace() {
               <p className="mt-2 text-sm text-dim">
                 It is parsed in this browser and stored in IndexedDB. It is never uploaded.
               </p>
+              {reviewTitle && (notes.length > 0 || disclosure.length > 0) && (
+                <p className="mt-4 rounded-lg border border-line bg-panel p-3 text-xs text-dim">
+                  Your draft and disclosure log for
+                  <span className="text-fg"> “{reviewTitle}” </span>
+                  are still here. Reopen that manuscript to keep working, or export
+                  them from the panel on the right.
+                </p>
+              )}
               <div className="mt-6 flex justify-center gap-3">
                 <label className="cursor-pointer rounded-lg border border-line px-4 py-2 text-sm hover:bg-raised">
                   {busy ?? 'Choose .txt / .md / .pdf'}
@@ -152,8 +201,9 @@ function Workspace() {
                   {manuscript.wordCount} words · {releasedIds.size} sentences released
                 </span>
                 <button
-                  onClick={async () => { await clearManuscript(); setManuscript(null); await refresh(); }}
+                  onClick={async () => { await clearManuscript(); setManuscript(null); setOutput(null); await refresh(); }}
                   className="ml-auto rounded-md border border-line px-2.5 py-1 text-xs hover:bg-raised"
+                  title="Removes the manuscript text and revokes standing grants. Your draft and disclosure log are kept."
                 >
                   Close manuscript
                 </button>
@@ -228,15 +278,22 @@ function Workspace() {
           </div>
           <div className="min-h-0 flex-1">
             {tab === 'log'
-              ? <DisclosureLog entries={disclosure} />
+              ? <DisclosureLog entries={disclosure} reviewTitle={reviewTitle} manuscriptOpen={!!manuscript} />
               : <ReviewDraft
                   notes={notes}
                   onAdd={async (text) => { await addNote({ text, sectionId: null, source: 'reviewer' }); await refresh(); }}
                   onDelete={async (id) => { await deleteNote(id); await refresh(); }}
+                  reviewTitle={reviewTitle}
                 />}
           </div>
         </aside>
       </div>
+
+      <ConfirmDialog
+        open={!!confirm}
+        {...(confirm ?? {})}
+        onCancel={() => setConfirm(null)}
+      />
     </div>
   );
 }

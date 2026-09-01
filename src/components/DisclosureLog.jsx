@@ -5,10 +5,12 @@
  * and it is the reason a reviewer could defend using this tool to an editor.
  * Build it early; it is not a nice-to-have.
  */
-export default function DisclosureLog({ entries }) {
+export default function DisclosureLog({ entries, reviewTitle, manuscriptOpen }) {
   const exportMd = () => {
     const lines = [
       '# AI assistance disclosure',
+      '',
+      `Manuscript: ${reviewTitle ?? 'unknown'}`,
       '',
       'Tool: ReviewGate. The manuscript was processed entirely in the reviewer\'s',
       'browser and was not transmitted to any server. Every passage below was',
@@ -39,6 +41,13 @@ export default function DisclosureLog({ entries }) {
           Export for editor
         </button>
       </div>
+
+      {reviewTitle && !manuscriptOpen && entries.length > 0 && (
+        <div className="border-b border-line bg-ink/40 px-4 py-2 text-xs text-dim">
+          Kept from your review of <span className="text-fg">“{reviewTitle}”</span>.
+          The manuscript is closed; this record is not.
+        </div>
+      )}
 
       <div className="flex-1 overflow-auto p-3 text-xs">
         {!entries.length && (

@@ -98,6 +98,30 @@ await page.waitForTimeout(400);
 check('reviewer can add notes',
   (await page.locator('aside').innerText()).includes('Sample size is not justified'));
 
+/* --- what survives closing the manuscript -------------------------------- */
+const logBefore = (await page.locator('aside').innerText()).length;
+await page.getByRole('button', { name: /^Disclosure/ }).click();
+await page.getByRole('button', { name: 'Close manuscript' }).click();
+await page.waitForTimeout(600);
+check('disclosure log survives closing the manuscript',
+  (await page.locator('aside').innerText()).includes('released'));
+await page.getByRole('button', { name: /^Draft/ }).click();
+await page.waitForTimeout(300);
+check('review draft survives closing the manuscript',
+  (await page.locator('aside').innerText()).includes('Sample size is not justified'));
+check('kept work is attributed to its manuscript',
+  (await page.locator('main').innerText()).includes('are still here'));
+
+/* --- erasing is possible and complete ------------------------------------ */
+await page.getByRole('button', { name: 'erase local data' }).click();
+await page.waitForTimeout(300);
+check('erase asks before destroying the record',
+  (await page.locator('[role=dialog]').innerText()).includes('cannot be undone'));
+await page.getByRole('button', { name: 'Erase everything' }).click();
+await page.waitForTimeout(800);
+check('erase clears draft and disclosure',
+  !(await page.locator('aside').innerText()).includes('Sample size is not justified'));
+
 /* --- the app must work with no WebMCP at all ----------------------------- */
 const bare = await browser.newPage();
 await bare.addInitScript(() => {

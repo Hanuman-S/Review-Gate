@@ -73,12 +73,14 @@ and are cleared when the manuscript closes.
 ```bash
 npm install
 npm run dev        # http://localhost:5173
-npm run verify     # 15-check smoke test (needs the dev server running)
+npm run verify     # 22-check smoke test (needs the dev server running)
 ```
 
 In development a minimal `document.modelContext` polyfill is installed so the
 whole flow — gate, grants, log — works without Chrome 149. It is **not** a real
 agent surface and never reaches a production build.
+
+`npm run verify` also needs Chromium once: `npx playwright install chromium`.
 
 For the real API:
 

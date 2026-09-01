@@ -5,12 +5,14 @@ import { useState } from 'react';
  * draft_review_section) and read it back, but the notes are the reviewer's
  * words and released material only — never unreleased manuscript text.
  */
-export default function ReviewDraft({ notes, onAdd, onDelete }) {
+export default function ReviewDraft({ notes, onAdd, onDelete, reviewTitle }) {
   const [text, setText] = useState('');
 
   const exportMd = () => {
     const body = [
       '# Reviewer report',
+      '',
+      `Manuscript: ${reviewTitle ?? 'unknown'}`,
       '',
       ...notes.map((n) =>
         n.text.startsWith('##')
