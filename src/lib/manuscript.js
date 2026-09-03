@@ -44,9 +44,9 @@ const makeIsHeading = (raw) => {
   const firstNumbered = lines.findIndex(isNumberedHeading);
   const numberedCount = lines.filter(isNumberedHeading).length;
 
-  // Running headers and footers repeat on every page ("NATIONAL INSTITUTE OF
-  // TECHNOLOGY KARNATAKA"). Identical text appearing three or more times is
-  // page furniture, not structure.
+  // Running headers and footers repeat on every page (an institution name, a
+  // journal title). Identical text appearing three or more times is page
+  // furniture, not structure.
   const tally = new Map();
   for (const l of lines) {
     const t = l.trim();
