@@ -227,7 +227,12 @@ function Workspace() {
                   className="rounded-md border border-line px-2.5 py-1 text-xs hover:bg-raised">check_stats_reporting</button>
                 <button onClick={() => run('find_claims', { kind: 'unsupported', reason: 'Checking for unsupported assertions.' })}
                   className="rounded-md border border-line px-2.5 py-1 text-xs hover:bg-raised">find_claims</button>
-                <button onClick={() => run('get_section_text', { section_id: 's1', reason: 'Reviewing the methods for sample size justification.' })}
+                <button onClick={() => run('get_section_text', {
+                  // Resolve by heading, not by index: a PDF adds a title
+                  // preamble that shifts every section id by one.
+                  section_id: (manuscript.sections.find((x) => /method/i.test(x.heading)) ?? manuscript.sections[1] ?? manuscript.sections[0]).id,
+                  reason: 'Reviewing the methods for sample size justification.',
+                })}
                   className="rounded-md border border-line px-2.5 py-1 text-xs hover:bg-raised">get_section_text</button>
                 <button onClick={() => run('locate_figure_reference', {})}
                   className="rounded-md border border-line px-2.5 py-1 text-xs hover:bg-raised">locate_figure_reference</button>
